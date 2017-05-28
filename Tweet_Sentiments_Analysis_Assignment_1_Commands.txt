@@ -1,0 +1,23 @@
+flume-ng agent -n TwitterAgent -f $FLUME_HOME/conf/twitter.conf
+
+register /home/neeraj/Downloads/Extra_Jar_files/elephant-bird-hadoop-compat-4.1.jar;
+register /home/neeraj/Downloads/Extra_Jar_files/elephant-bird-pig-4.1.jar;
+register /home/neeraj/Downloads/Extra_Jar_files/json-simple-1.1.1.jar;
+
+pig -x local
+
+load_tweets = LOAD '/home/neeraj/Downloads/tweets_Acadgild/' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS myMap;
+
+extract_details = FOREACH load_tweets GENERATE myMap#'id' as id,myMap#'text' as text;
+
+tokens = foreach extract_details generate id,text, FLATTEN(TOKENIZE(text)) As word;
+
+dictionary = load '/home/neeraj/Desktop/AFINN.txt' using PigStorage('\t') AS(word:chararray,rating:int);
+
+word_rating = join tokens by word left outer, dictionary by word using 'replicated';
+
+rating = foreach word_rating generate tokens::id as id,tokens::text as text, dictionary::rating as rate;
+
+word_group = group rating by (id,text);
+
+positive_tweets = filter avg_rate by tweet_rating>=0;
